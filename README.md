@@ -15,8 +15,8 @@
 ## Requirements
 
 *   Python 3.9+
-*   Kivy framework
-*   Google Generative AI SDK
+*   Kivy framework (see requirements.txt for specific version)
+*   Google Generative AI SDK (see requirements.txt for specific version)
 
 ## Setup Instructions
 
