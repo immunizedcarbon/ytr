@@ -24,8 +24,8 @@ Follow these steps to set up and run the application:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone https://github.com/your-username/your-repository-name.git # Replace with your actual repository URL
-    cd your-repository-name
+    git clone https://github.com/immunizedcarbon/ytr/
+    cd ytr
     ```
 
 2.  **Create and Activate a Virtual Environment:**
