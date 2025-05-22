@@ -11,8 +11,8 @@ from kivy.uix.button import Button
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
 from kivy.uix.progressbar import ProgressBar
-from kivy.graphics import Color, Rectangle # Keep if used for custom drawing, else remove
-from kivy.utils import get_color_from_hex, platform
+# from kivy.graphics import Color, Rectangle # Removed unused
+from kivy.utils import get_color_from_hex # Removed unused platform
 from kivy.clock import Clock
 
 import os
@@ -22,7 +22,7 @@ import logging # For application-level logging if desired
 
 # Local module imports
 from gemini_services import (
-    configure_gemini_client, get_gemini_model, transcribe_video,
+    configure_gemini_client, transcribe_video, # Removed get_gemini_model
     summarize_text, translate_text, clean_youtube_url
 )
 from utils import save_text_to_file, markdown_to_kivy_markup
@@ -51,6 +51,7 @@ class MainApp(App):
         self.current_summary = ""
         self.current_translation = ""
         self.is_processing = False # General flag for ongoing API calls
+        self.gemini_client = None # Added for the new SDK client instance
 
         self.youtube_url_regex = r'(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[a-zA-Z0-9_-]{11}'
         
@@ -229,7 +230,7 @@ class MainApp(App):
 
         # Models Spinner
         models_list = self.settings.get("models", DEFAULT_SETTINGS["models"])
-        self.model_spinner.values = [model.get("displayName", model.get("name")) for model in models_list if model.get("name")]
+        # self.model_spinner.values = [model.get("displayName", model.get("name")) for model in models_list if model.get("name")] # This line is erroneous as self.model_spinner no longer exists
         default_model_name = self.settings.get("selected_model_transcription", DEFAULT_SETTINGS["selected_model_transcription"])
         self._populate_spinner(self.transcription_model_spinner, models_list, default_model_name, "Transcription")
 
@@ -308,11 +309,12 @@ class MainApp(App):
             self.update_error_label("API Key cannot be empty.")
             self.update_status_label("API Key needed.")
             self.is_api_configured = False
+            self.gemini_client = None # Ensure client is None if key is empty
         else:
-            self.is_api_configured = configure_gemini_client(api_key)
+            self.gemini_client = configure_gemini_client(api_key)
+            self.is_api_configured = self.gemini_client is not None
             if self.is_api_configured:
                 self.update_status_label(f"GenAI Client Initialized.")
-                # Store/update API key in settings if desired (future enhancement)
             else:
                 self.update_error_label("Failed to initialize GenAI client. Check key or logs.")
                 self.update_status_label("Initialization Failed.")
@@ -356,22 +358,29 @@ class MainApp(App):
             return
 
         selected_model_name = self.get_selected_model_name_for_task("transcription")
-        model_instance = get_gemini_model(selected_model_name, self.transcription_system_prompt)
+        # model_instance = get_gemini_model(selected_model_name, self.transcription_system_prompt) # Removed
         
-        if not model_instance:
-            self.update_error_label(f"Failed to get model '{selected_model_name}' for transcription.")
+        # if not model_instance: # Client itself is checked, model name validity checked by API
+        #     self.update_error_label(f"Failed to get model '{selected_model_name}' for transcription.")
+        #     self.set_processing_state(False)
+        #     return
+
+        if not self.gemini_client:
+            self.update_error_label("Gemini client not initialized.")
             self.set_processing_state(False)
             return
 
         args = (
-            model_instance, cleaned_url, self.current_video_id,
-            self.update_progress_bar, self.update_status_label, # Callbacks
-            self.transcription_user_prompt # System prompt is part of model_instance now
+            self.gemini_client, selected_model_name, # Pass client and model name string
+            cleaned_url, self.current_video_id,
+            self.update_progress_bar, self.update_status_label, 
+            self.transcription_system_prompt, self.transcription_user_prompt
         )
         threading.Thread(target=self._transcription_thread_target, args=args, daemon=True).start()
 
-    def _transcription_thread_target(self, model, url, video_id, prog_cb, stat_cb, usr_prompt): # sys_prompt removed
-        result = transcribe_video(model, url, video_id, prog_cb, stat_cb, usr_prompt) # sys_prompt removed
+    def _transcription_thread_target(self, client: 'genai.Client', model_name: str, url: str, video_id: str, prog_cb: callable, stat_cb: callable, sys_prompt: str, usr_prompt: str):
+        """Helper thread for transcription to avoid blocking UI."""
+        result = transcribe_video(client, model_name, url, video_id, prog_cb, stat_cb, sys_prompt, usr_prompt)
         Clock.schedule_once(lambda dt: self.handle_transcription_result(result))
 
     def handle_transcription_result(self, result: dict):
@@ -401,20 +410,35 @@ class MainApp(App):
         self.current_summary = ""
 
         selected_model_name = self.get_selected_model_name_for_task("summary")
-        model_instance = get_gemini_model(selected_model_name, self.summary_system_prompt)
-        if not model_instance:
-            self.update_error_label(f"Failed to get model '{selected_model_name}' for summary.")
+        # model_instance = get_gemini_model(selected_model_name, self.summary_system_prompt) # Removed
+        # if not model_instance: # Client is checked
+        #     self.update_error_label(f"Failed to get model '{selected_model_name}' for summary.")
+        #     self.set_processing_state(False)
+        #     return
+        
+        if not self.gemini_client:
+            self.update_error_label("Gemini client not initialized.")
             self.set_processing_state(False)
             return
-        
-        # Format user prompt with actual text
-        user_prompt = self.summary_user_prompt_template.format(text_content=self.current_transcription)
 
-        args = (model_instance, self.current_transcription, self.update_status_label, user_prompt) # sys_prompt removed
+        # Format user prompt with actual text
+        # The summarize_text function now expects the full prompt including the text to be summarized
+        # as the `text_to_summarize_or_full_user_prompt` argument.
+        full_user_prompt_for_summary = self.summary_user_prompt_template.format(text_content=self.current_transcription)
+
+        args = (
+            self.gemini_client, selected_model_name, 
+            full_user_prompt_for_summary, # This is the text_to_summarize_or_full_user_prompt
+            self.update_status_label, 
+            self.summary_system_prompt
+            # user_prompt (the template itself) is not passed to service layer anymore
+        )
         threading.Thread(target=self._summarization_thread_target, args=args, daemon=True).start()
 
-    def _summarization_thread_target(self, model, text, stat_cb, usr_prompt): # sys_prompt removed
-        result = summarize_text(model, text, stat_cb, usr_prompt) # sys_prompt removed
+    def _summarization_thread_target(self, client: 'genai.Client', model_name: str, full_user_prompt: str, stat_cb: callable, sys_prompt: str):
+        """Helper thread for summarization."""
+        # `target_language_name` is default in summarize_text, so not passed here
+        result = summarize_text(client, model_name, full_user_prompt, stat_cb, sys_prompt)
         Clock.schedule_once(lambda dt: self.handle_summarization_result(result))
 
     def handle_summarization_result(self, result: dict):
@@ -440,24 +464,34 @@ class MainApp(App):
         self.current_translation = ""
 
         selected_model_name = self.get_selected_model_name_for_task("translation")
-        model_instance = get_gemini_model(selected_model_name, self.translation_system_prompt)
-        if not model_instance:
-            self.update_error_label(f"Failed to get model '{selected_model_name}' for translation.")
+        # model_instance = get_gemini_model(selected_model_name, self.translation_system_prompt) # Removed
+        # if not model_instance: # Client is checked
+        #     self.update_error_label(f"Failed to get model '{selected_model_name}' for translation.")
+        #     self.set_processing_state(False)
+        #     return
+        
+        if not self.gemini_client:
+            self.update_error_label("Gemini client not initialized.")
             self.set_processing_state(False)
             return
 
         target_language_display_name = self.translation_lang_spinner.text
         
-        user_prompt = self.translation_user_prompt_template.format(
-            target_language=target_language_display_name, 
-            text_content=self.current_transcription
-        )
+        # User prompt template is passed directly to translate_text service function
+        # text_to_translate is self.current_transcription
 
-        args = (model_instance, self.current_transcription, target_language_display_name, self.update_status_label, user_prompt) # sys_prompt removed
+        args = (
+            self.gemini_client, selected_model_name,
+            self.current_transcription, target_language_display_name, 
+            self.update_status_label, 
+            self.translation_system_prompt, 
+            self.translation_user_prompt_template # Pass the template
+        )
         threading.Thread(target=self._translation_thread_target, args=args, daemon=True).start()
 
-    def _translation_thread_target(self, model, text, lang_name, stat_cb, usr_prompt): # sys_prompt removed
-        result = translate_text(model, text, lang_name, stat_cb, usr_prompt) # sys_prompt removed
+    def _translation_thread_target(self, client: 'genai.Client', model_name: str, text: str, lang_name: str, stat_cb: callable, sys_prompt: str, usr_prompt_template: str):
+        """Helper thread for translation."""
+        result = translate_text(client, model_name, text, lang_name, stat_cb, sys_prompt, usr_prompt_template)
         Clock.schedule_once(lambda dt: self.handle_translation_result(result))
 
     def handle_translation_result(self, result: dict):

@@ -16,7 +16,7 @@
 
 *   Python 3.9+
 *   Kivy framework (see requirements.txt for specific version)
-*   Google Generative AI SDK (see requirements.txt for specific version)
+*   Google Generative AI SDK (using the 'google-genai' package; see requirements.txt for specific version)
 
 ## Setup Instructions
 
@@ -95,6 +95,12 @@ After completing the setup and configuration:
 *   **Kivy Installation Issues:** If `pip install kivy` fails, consult the [official Kivy documentation](https://kivy.org/doc/stable/gettingstarted/installation.html) for platform-specific dependencies and troubleshooting steps.
 *   **API Key Errors:** Ensure your API key is correctly entered and has the necessary permissions for the Gemini API. Check the error messages in the UI for more details.
 *   **`[Errno videos_unavailable]` or similar from Gemini:** This might indicate the specific YouTube video cannot be accessed or processed by the Gemini API. Try a different video.
+*   **Kivy Clipboard Warnings on Linux (e.g., "Unable to find any valuable Cutbuffer provider"):**
+    Kivy relies on external utilities for clipboard functionality on Linux. If you see warnings related to cutbuffers, or if copy/paste within the app isn't working as expected, you may need to install `xclip` or `xsel`. You can do this by running:
+    ```bash
+    sudo apt-get update
+    sudo apt-get install xclip  # or sudo apt-get install xsel
+    ```
 
 ## License
 

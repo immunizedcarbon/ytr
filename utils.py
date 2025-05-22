@@ -3,8 +3,8 @@ from datetime import datetime
 from pathlib import Path
 import logging
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Get a logger for this module
+logger = logging.getLogger(__name__)
 
 def sanitize_filename_part(part: str, max_length: int = 50) -> str:
     """
@@ -63,33 +63,28 @@ def save_text_to_file(
              f"--------------------------------------------------\n\n"
     
     full_content_to_save = header + content
-
-    # --- Simulation of Kivy File Dialog / Actual Saving ---
-    # In a Kivy app, you'd use a FileChooser dialog here.
-    # For this worker environment, we'll first try to save to a predefined location.
-    # This helps test the content preparation and filename generation.
     
     try:
-        output_dir = Path.home() / "app_output_youtube_gemini" # Using a more specific name
+        # Using a more specific name consistent with settings_manager.py if it were to save there
+        output_dir = Path.home() / "youtube_gemini_outputs" 
         output_dir.mkdir(parents=True, exist_ok=True)
         file_path = output_dir / suggested_filename
         
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(full_content_to_save)
         
-        logging.info(f"File content prepared and saved to: {file_path}")
+        logger.info(f"File content prepared and saved to: {file_path}")
+        # These print statements are for simulation in a headless environment
         print(f"SIMULATED SAVE: Would ask user to save '{suggested_filename}'.")
-        print(f"Full content that would be saved:\n{full_content_to_save[:200]}...") # Print snippet
         print(f"Actually saved for testing at: {file_path}")
-        return str(file_path) # Return the actual path where it was saved for testing
+        return str(file_path)
 
     except IOError as e:
-        logging.error(f"Error during file saving simulation: {e}")
+        logger.error(f"Error during file saving simulation: {e}")
         print(f"ERROR: Could not simulate save for '{suggested_filename}' due to: {e}")
-        # Fallback to just returning the suggested name if saving fails
         return suggested_filename 
     except Exception as e:
-        logging.error(f"An unexpected error occurred during file saving: {e}")
+        logger.error(f"An unexpected error occurred during file saving: {e}")
         print(f"UNEXPECTED ERROR during save for '{suggested_filename}': {e}")
         return None
 
@@ -97,28 +92,15 @@ def save_text_to_file(
 def markdown_to_kivy_markup(text: str) -> str:
     """
     Placeholder function to convert Markdown text to Kivy's rich text markup.
-    
-    Currently, this function is a basic placeholder. Kivy's markup is XML-like
-    and supports tags like [b], [i], [color], [font], [size], etc.
-    A full Markdown conversion is complex. This might be enhanced later
-    to handle common Markdown (like bold, italics, lists) if needed.
-
-    For now, it can do very simple replacements or just return the text.
-    Kivy's Label with markup=True might handle some basic HTML-like tags,
-    but it's not a full Markdown parser.
     """
-    # Example: Very basic bold and italic (won't handle nested or complex cases)
-    # text = text.replace("**", "[b]").replace("__", "[b]") # Approximation
-    # text = text.replace("*", "[i]").replace("_", "[i]")   # Approximation
-    
-    # For now, just return the text as is, assuming that Gemini might provide
-    # simple enough text that doesn't heavily rely on complex Markdown.
-    # Or, the Kivy Labels will display the raw Markdown-ish text.
-    logging.info("markdown_to_kivy_markup: Placeholder used, returning text as is.")
+    logger.info("markdown_to_kivy_markup: Placeholder used, returning text as is.")
     return text
 
 
 if __name__ == '__main__':
+    # Basic configuration for standalone testing of this module
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
     print("Testing utils.py functions...")
 
     # Test sanitize_filename_part
@@ -145,10 +127,11 @@ if __name__ == '__main__':
     print(f"Call 2: save_text_to_file returned: {saved_path2}")
     
     if saved_path1:
-        print(f"\nTo verify, check the file at: {saved_path1}")
-        # You can add a read back here if needed for automated testing of content
-        # with open(saved_path1, "r", encoding="utf-8") as f_read:
-        #     print(f"Content of {saved_path1}:\n{f_read.read()[:300]}...")
+        try:
+            with open(saved_path1, "r", encoding="utf-8") as f_read:
+                print(f"Content of {saved_path1} (first 300 chars):\n{f_read.read(300)}...")
+        except FileNotFoundError:
+            print(f"File {saved_path1} not found, could not read back content.")
 
 
     # Test markdown_to_kivy_markup
