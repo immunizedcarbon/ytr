@@ -1,2 +1,2 @@
 kivy==2.3.1
-google-generativeai==1.16.1
+google-genai==0.8.5
